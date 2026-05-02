@@ -1,0 +1,117 @@
+services:
+
+  # ─────────────────────────────────────────
+  # TAILSCALE - Secure access sidecar
+  # ─────────────────────────────────────────
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: tailscale
+    restart: unless-stopped
+    hostname: ${TS_HOSTNAME}
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_SERVE_CONFIG=/config/ts-serve.json
+      - TS_USERSPACE=false
+    volumes:
+      - /container-data/tailscale:/var/lib/tailscale
+      - /container-data/tailscale/config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    network_mode: host
+
+  # ─────────────────────────────────────────
+  # POSTGRESQL - Paperless database
+  # ─────────────────────────────────────────
+  postgresql:
+    image: postgres:16-alpine
+    container_name: paperless-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${PAPERLESS_DB_NAME}
+      - POSTGRES_USER=${PAPERLESS_DB_USER}
+      - POSTGRES_PASSWORD=${PAPERLESS_DB_PASS}
+    volumes:
+      - /container-data/postgresql:/var/lib/postgresql/data
+    networks:
+      - paperlessnet
+
+  # ─────────────────────────────────────────
+  # REDIS - Paperless broker
+  # ─────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: paperless-redis
+    restart: unless-stopped
+    volumes:
+      - /container-data/redis:/data
+    networks:
+      - paperlessnet
+
+  # ─────────────────────────────────────────
+  # PAPERLESS-NGX - Document management
+  # ─────────────────────────────────────────
+  paperless-ngx:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: paperless-ngx
+    restart: unless-stopped
+    depends_on:
+      - postgresql
+      - redis
+    environment:
+      - PAPERLESS_REDIS=redis://redis:6379
+      - PAPERLESS_DBHOST=postgresql
+      - PAPERLESS_DBNAME=${PAPERLESS_DB_NAME}
+      - PAPERLESS_DBUSER=${PAPERLESS_DB_USER}
+      - PAPERLESS_DBPASS=${PAPERLESS_DB_PASS}
+      - PAPERLESS_SECRET_KEY=${PAPERLESS_SECRET_KEY}
+      - PAPERLESS_TIME_ZONE=${TZ}
+      - PAPERLESS_OCR_LANGUAGE=deu+eng     # German + English - adjust as needed
+      - PAPERLESS_URL=https://${TS_HOSTNAME}.${TS_DOMAIN}
+      - USERMAP_UID=${PUID}
+      - USERMAP_GID=${PGID}
+    volumes:
+      - /container-data/paperless-ngx:/usr/src/paperless/data
+      - /data/paperless/documents:/usr/src/paperless/media
+      - /data/paperless/consume:/usr/src/paperless/consume
+      - /data/paperless/export:/usr/src/paperless/export
+    ports:
+      - 8010:8000
+    networks:
+      - paperlessnet
+
+  # ─────────────────────────────────────────
+  # PAPERLESS-GPT - AI document tagging
+  # ─────────────────────────────────────────
+  paperless-gpt:
+    image: icereed/paperless-gpt:latest
+    container_name: paperless-gpt
+    restart: unless-stopped
+    depends_on:
+      - paperless-ngx
+    environment:
+      - PAPERLESS_BASE_URL=http://paperless-ngx:8000
+      - PAPERLESS_API_TOKEN=${PAPERLESS_API_TOKEN}
+      - PAPERLESS_PUBLIC_URL=https://${TS_HOSTNAME}.${TS_DOMAIN}
+      - LLM_PROVIDER=anthropic
+      - LLM_MODEL=claude-haiku-4-5-20251001
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - MANUAL_TAG=paperless-gpt
+      - AUTO_TAG=paperless-gpt-auto
+      - AUTO_GENERATE_TITLE=true
+      - AUTO_GENERATE_TAGS=true
+      - AUTO_GENERATE_CORRESPONDENT=true
+      - AUTO_GENERATE_DOCUMENT_TYPE=true
+      - LANGUAGE=German,English
+    volumes:
+      - /container-data/paperless-gpt:/app/prompts
+    ports:
+      - 8011:8080
+    networks:
+      - paperlessnet
+
+networks:
+  paperlessnet:
+    driver: bridge
