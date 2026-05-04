@@ -69,7 +69,8 @@ services:
       - PAPERLESS_SECRET_KEY=${PAPERLESS_SECRET_KEY}
       - PAPERLESS_TIME_ZONE=${TZ}
       - PAPERLESS_OCR_LANGUAGE=deu+eng     # German + English - adjust as needed
-      - PAPERLESS_URL=https://${TS_HOSTNAME}.${TS_DOMAIN}
+      - PAPERLESS_URL=${PAPERLESS_URL}
+      - PAPERLESS_CSRF_TRUSTED_ORIGINS=${PAPERLESS_CSRF_TRUSTED_ORIGINS}
       - USERMAP_UID=${PUID}
       - USERMAP_GID=${PGID}
     volumes:
@@ -94,9 +95,11 @@ services:
     environment:
       - PAPERLESS_BASE_URL=http://paperless-ngx:8000
       - PAPERLESS_API_TOKEN=${PAPERLESS_API_TOKEN}
-      - PAPERLESS_PUBLIC_URL=https://${TS_HOSTNAME}.${TS_DOMAIN}
+      - PAPERLESS_PUBLIC_URL=${PAPERLESS_URL}
       - LLM_PROVIDER=anthropic
       - LLM_MODEL=claude-haiku-4-5-20251001
+      - VISION_LLM_PROVIDER=${VISION_LLM_PROVIDER}
+      - VISION_LLM_MODEL=${VISION_LLM_MODEL}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - MANUAL_TAG=paperless-gpt
       - AUTO_TAG=paperless-gpt-auto
@@ -105,6 +108,7 @@ services:
       - AUTO_GENERATE_CORRESPONDENT=true
       - AUTO_GENERATE_DOCUMENT_TYPE=true
       - LANGUAGE=German,English
+      - TOKEN_LIMIT=4000
     volumes:
       - /container-data/paperless-gpt:/app/prompts
     ports:
