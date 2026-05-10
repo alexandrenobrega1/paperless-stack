@@ -1,0 +1,8 @@
+[Unit]
+Description=Paperless backup - export and PostgreSQL dump
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/paperless-stack/scripts/backup.sh
